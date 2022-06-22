@@ -4,31 +4,34 @@ pipeline {
     stage('Build') {
       steps {
         sh 'apt install rsync -y'
-        withCredentials(bindings: [sshUserPrivateKey(credentialsId: 'HOST', keyFileVariable: 'SSH_KEY')]) {
-          sh 'ssh -i ${SSH_KEY} -oStrictHostKeyChecking=no thootau@192.168.76.252 "echo test"'
-        }
-        withCredentials([gitUsernamePassword(credentialsId: 'thootau99',
-                gitToolName: 'git-tool')]) {
-         //sh 'mkdir build'
-         //sh 'cp -r ./* ./build'
-         sh 'rsync -av . ./build --exclude build --exclude=".*/"'
-         sh 'ls -lat'
-         sh 'rm -rf ci_php_release'
-         sh 'git clone https://github.com/thootau99/ci_php_release.git'
-         sh 'rm -rf ./ci_php_release/*'
-         sh 'rsync -av ./build/* ./ci_php_release --exclude build --exclude=".*/"'
-         //sh 'cp -r ./build/* ./ci_php_release'
-         sh 'cd ci_php_release'
-         sh 'version=$(cat .version)'
-         sh 'echo $pwd && ls -lat && ls -lat ../'
-         sh 'git config --global user.email "thootau99@tutanota.com" && git config --global user.name "thootau"'
-         sh 'cd ci_php_release && git add . && git commit -m "PUSH TO VERSION $version"'
-         sh 'cd ci_php_release && git checkout -b release/version_${version} && git push -u'
-         //sh 'git checkout -b release/latest && git push -u'
-       } 
+        withCredentials(bindings: [gitUsernamePassword(credentialsId: 'thootau99',
+                        gitToolName: 'git-tool')]) {
+          sh 'rsync -av . ./build --exclude build --exclude=".*/"'
+          sh 'rm -rf ci_php_release'
+          sh 'git clone https://github.com/thootau99/ci_php_release.git'
+          sh 'rm -rf ./ci_php_release/*'
+          sh 'rsync -av ./build/* ./ci_php_release --exclude build --exclude=".*/"'
+          sh 'git config --global user.email "thootau99@tutanota.com" && git config --global user.name "thootau"'
+          sh '''
+            cd ci_php_release
+            version=v$(cat ../.version)
+            if [ $(git tag -l "$version") ]; then
+              version=$version-$(date +"%F_%T")-repeat
+            fi
+            git add .
+            git commit -m "PUSH TO VERSION $version"
 
-        sh 'cd ..'
-        sh 'ls -lat'
+            git tag -a $version -m "PUSH TO VERSION $version"
+            git push origin $version
+          '''
+        }
+
+      }
+    }
+
+    stage('Clean') {
+      steps {
+        cleanWs(cleanWhenFailure: true, cleanWhenAborted: true, cleanWhenNotBuilt: true, cleanWhenSuccess: true, cleanWhenUnstable: true)
       }
     }
 
